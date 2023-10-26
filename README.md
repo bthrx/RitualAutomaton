@@ -1,5 +1,5 @@
 # RitualAutomaton
-An interactive python to quickly set up an Emulated Android device for proxying traffic.
+An interactive python script to quickly set up an Emulated Android device for proxying traffic.
 #Setup
 1. Create a device with avdmanager, Android Studio, or Intelli J.
 2. The API must be less than 34 (Android 14) and DOES NOT have the Play Store in order for this script to work.
