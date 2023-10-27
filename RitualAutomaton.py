@@ -1,6 +1,7 @@
 import os
 import subprocess
 import argparse
+import time
 
 # check if adb is installed and added to PATH
 try:
@@ -51,27 +52,48 @@ else:
 if certificate_path.endswith(".crt") or certificate_path.endswith(".pem"):
     subject_hash = subprocess.check_output(f"openssl x509 -inform PEM -subject_hash_old -in {certificate_path} | head -n 1", shell=True).decode().strip()
     subprocess.Popen(f"openssl x509 -in {certificate_path} -inform PEM -outform DER -out {subject_hash}.0", shell=True)
-elif certificate_path.endswith(".DER"):
-    subject_hash = os.path.splitext(os.path.basename(certificate_path))[0]
-    subprocess.Popen(f"openssl x509 -in {certificate_path} -inform DER -outform DER -out {subject_hash}.0.tmp", shell=True)
+elif certificate_path.endswith(".der"):
+    subject_hash = subprocess.check_output(f"openssl x509 -inform DER -subject_hash_old -in {certificate_path} | head -n 1", shell=True).decode().strip()
+    subprocess.Popen(f"openssl x509 -in {certificate_path} -inform DER -outform DER -out {subject_hash}.0", shell=True)
 else:
     print("Invalid certificate file format")
     exit()
 
+print(f"Pushing certificate to device {device_name}")
 subprocess.check_output(f"adb -s {device_name} root", shell=True)
-subprocess.check_output(f"adb -s {device_name} shell \"mkdir /data/misc/user/0/cacerts-added\"", shell=True)
-subprocess.check_output(f"adb -s {device_name} push {subject_hash}.0 /data/misc/user/0/cacerts-added/", shell=True)
+print("adb root command executed")
+try:
+    subprocess.check_output(f"adb -s {device_name} shell \"su 0 mkdir /data/misc/user/0/cacerts-added\"", shell=True)
+    print("adb shell mkdir command executed")
+except subprocess.CalledProcessError:
+    pass
+subprocess.check_output(f"adb -s {device_name} push {subject_hash}.0 /data/misc/user/0/cacerts-added/{subject_hash}.0", shell=True)
+print("adb push command executed")
 subprocess.check_output(f"adb -s {device_name} shell \"su 0 chmod 664 /data/misc/user/0/cacerts-added/{subject_hash}.0\"", shell=True)
+print("adb shell chmod command executed")
 subprocess.check_output(f"adb -s {device_name} remount", shell=True)
+print("adb remount command executed")
 
 if "remount succeeded" in subprocess.check_output(f"adb -s {device_name} remount", shell=True).decode():
+    print(f"Moving certificate to /system/etc/security/cacerts on device {device_name}")
     subprocess.check_output(f"adb -s {device_name} shell \"mv /data/misc/user/0/cacerts-added/{subject_hash}.0 /system/etc/security/cacerts\"", shell=True)
+    print("adb shell mv command executed")
     subprocess.check_output(f"adb -s {device_name} reverse tcp:8888 tcp:8888", shell=True)
+    print("adb reverse command executed")
     print("Please set your intercept proxy to listen on 127.0.0.1:8888 and set the proxy on the device to 127.0.0.1:8888")
 else:
+    print(f"Rebooting device {device_name}")
     subprocess.check_output(f"adb -s {device_name} reboot", shell=True)
+    print("adb reboot command executed")
+    time.sleep(30)
+    subprocess.check_output(f"adb -s {device_name} root", shell=True)
+    print("adb root command executed")
     subprocess.check_output(f"adb -s {device_name} remount", shell=True)
+    print("adb remount command executed")
     if "remount succeeded" in subprocess.check_output(f"adb -s {device_name} remount", shell=True).decode():
+        print(f"Moving certificate to /system/etc/security/cacerts on device {device_name}")
         subprocess.check_output(f"adb -s {device_name} shell \"mv /data/misc/user/0/cacerts-added/{subject_hash}.0 /system/etc/security/cacerts\"", shell=True)
+        print("adb shell mv command executed")
         subprocess.check_output(f"adb -s {device_name} reverse tcp:8888 tcp:8888", shell=True)
+        print("adb reverse command executed")
         print("Please set your intercept proxy to listen on 127.0.0.1:8888 and set the proxy on the device to 127.0.0.1:8888")
